@@ -1,0 +1,310 @@
+---
+title: "Final Project"
+author: "Ben Ahnen"
+date: "4/26/2022"
+output: html_document
+---
+
+```{r librarying data, warning=FALSE, echo=FALSE, message=FALSE}
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(tidyr)
+library(forcats)
+library(tidyverse)
+library(readr)
+library(modelr)
+library(broom)
+library(kableExtra)
+library(formattable)
+library(scales)
+library(pROC)
+```
+## Reading in the data
+
+```{r chunk1, reading in data, echo = FALSE, message=FALSE}
+data = read_csv("Metro_Interstate_Traffic_Volume.csv")
+```
+## Data Manipulation
+
+```{r chunk2, data manipulation, message = FALSE}
+data$traffic_level = ifelse(data$traffic_volume >= median(data$traffic_volume), 1, 0)
+
+data$holiday_categorical <- ifelse(data$holiday == "None", 0, 1)
+
+data$month = months(data$date_time)
+
+data$day = weekdays(data$date_time)
+
+data$hour = format(strptime(data$date_time, "%Y-%m-%d %H:%M:%S"), "%H")
+
+data$year = format(strptime(data$date_time, "%Y-%m-%d %H:%M:%S"), "%Y")
+```
+
+```{r chucnk3, kelving to fahrenheit, message=FALSE}
+data$temp_fahrenheit <- (data$temp - 273.15) * 9/5 + 32
+```
+
+```{r chunk4, normalizing data, message=FALSE}
+data$norm_rain_1h <- (data$rain_1h - min(data$rain_1h))/(max(data$rain_1h)-min(data$rain_1h))
+
+data$norm_fahrenheit <- (data$temp_fahrenheit - min(data$temp_fahrenheit))/(max(data$temp_fahrenheit)-min(data$temp_fahrenheit))
+
+data$norm_snow_1h <- (data$snow_1h - min(data$snow_1h))/(max(data$snow_1h)-min(data$snow_1h))
+
+data$norm_clouds_all<- (data$clouds_all - min(data$clouds_all))/(max(data$clouds_all)-min(data$clouds_all))
+```
+
+## Exploratory Data Analysis
+
+```{r chunk5, data manipulation, message=FALSE, echo=FALSE}
+data_df = group_by(data, day)
+day_Summary = summarize(data_df,
+                           TotalTraffic = sum(traffic_volume),
+                           MedianTraffic = median(traffic_volume),
+                           SdTraffic = sd(traffic_volume),
+                           MeanTraffic = mean(traffic_volume))
+
+day_Summary$MeanTraffic = round(day_Summary$MeanTraffic, digits = 0)
+```
+
+```{r summaryDay, message = FALSE, echo=FALSE}
+kable(day_Summary, digits = c(0, 2, 2, 2, 2, 2, 2),
+        col.names = c('Day', 'Total Traffic', 'Median Traffic', 'SD Traffic', 'Mean Traffic'),
+        align = 'crrrrrrrr',
+        caption = 'Descriptive Statistics For Days') %>% 
+  kable_styling(bootstrap_options = c('striped', 'hover', 'condensed', 
+                                      'responsive', 'bordered'))
+```
+
+```{r chunk6, histograms, message=FALSE, echo=FALSE}
+meanTravel = qplot(day,
+               MeanTraffic,
+               data = day_Summary,
+               geom = "col",
+               fill = I("gold"),
+               colour = I("black"),
+               main = "Mean Traffic Volume by Day of Week") +
+            theme(axis.text.x = element_text(
+            angle = 90, 
+            vjust=0.5)) +
+            scale_x_discrete(limits = c('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')) +
+            geom_text(aes(label=MeanTraffic), size=2.75, vjust=-0.4)
+meanTravel
+```
+
+```{r chunk7, data manipulation, message=FALSE, echo=FALSE}
+ungroup(data_df)
+data_df = group_by(data, holiday)
+holiday_Summary = summarize(data_df,
+                           TotalTraffic = sum(traffic_volume),
+                           MedianTraffic = median(traffic_volume),
+                           SdTraffic = sd(traffic_volume),
+                           MeanTraffic = mean(traffic_volume))
+
+holiday_Summary$MeanTraffic = round(holiday_Summary$MeanTraffic, digits = 0)
+```
+
+```{r summaryHoliday, message = FALSE, echo=FALSE}
+kable(holiday_Summary, digits = c(0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2),
+        col.names = c('Holiday', 'Total Traffic', 'Median Traffic', 'SD Traffic', 'Mean Traffic'),
+        align = 'crrrrrrrr',
+        caption = 'Descriptive Statistics For Different Holidays') %>% 
+  kable_styling(bootstrap_options = c('striped', 'hover', 'condensed', 
+                                      'responsive', 'bordered'))
+```
+
+```{r chunk8, holiday vs no holiday, message=FALSE, echo=FALSE}
+meanHolidayTravel = qplot(holiday,
+               MeanTraffic,
+               data = holiday_Summary,
+               geom = "col",
+               aes(reorder(holiday, -MeanTraffic)),
+               fill = I("gold"),
+               colour = I("black"),
+               main = "Mean Traffic Volume Holiday vs None Holiday") +
+            theme(axis.text.x = element_text(
+            angle = 90, 
+            vjust=0.5)) +
+            geom_text(aes(label=MeanTraffic), size=2.75, vjust=-.15)
+meanHolidayTravel
+```
+
+```{r group3, data manipulation, message=FALSE, echo=FALSE}
+ungroup(data_df)
+data_df = group_by(data, month)
+month_Summary = summarize(data_df,
+                           TotalTraffic = sum(traffic_volume),
+                           MedianTraffic = median(traffic_volume),
+                           SdTraffic = sd(traffic_volume),
+                           MeanTraffic = mean(traffic_volume))
+
+month_Summary$MeanTraffic = round(month_Summary$MeanTraffic, digits = 0)
+```
+
+```{r summaryMonth, message = FALSE, echo=FALSE}
+kable(month_Summary, digits = c(0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2),
+        col.names = c('Month', 'Total Traffic', 'Median Traffic', 'SD Traffic', 'Mean Traffic'),
+        align = 'crrrrrrrr',
+        caption = 'Descriptive Statistics For Different Months') %>% 
+  kable_styling(bootstrap_options = c('striped', 'hover', 'condensed', 
+                                      'responsive', 'bordered'))
+```
+
+```{r plot3, year vs avg traffic, message=FALSE, echo=FALSE}
+meanMonthTravel = qplot(month,
+               MeanTraffic,
+               data = month_Summary,
+               geom = "col",
+               fill = I("gold"),
+               colour = I("black"),
+               main = "Mean Traffic Volume by Month") +
+            theme(axis.text.x = element_text(
+            angle = 90, 
+            vjust=0.5)) +
+            scale_x_discrete(limits = c('January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December')) +
+            geom_text(aes(label=MeanTraffic), size=2.75, vjust=-.4)
+meanMonthTravel
+```
+
+```{r group4, data manipulation, message=FALSE, echo=FALSE}
+ungroup(data_df)
+data_df = group_by(data, weather_main)
+weather_Summary = summarize(data_df,
+                           TotalTraffic = sum(traffic_volume),
+                           MedianTraffic = median(traffic_volume),
+                           SdTraffic = sd(traffic_volume),
+                           MeanTraffic = mean(traffic_volume))
+
+weather_Summary$MeanTraffic = round(weather_Summary$MeanTraffic, digits = 0)
+```
+
+```{r summaryWeather, message = FALSE, echo=FALSE}
+kable(weather_Summary, digits = c(0, 2, 2, 2, 2, 2, 2, 2, 2, 2),
+        col.names = c('Weather Type', 'Total Traffic', 'Median Traffic', 'SD Traffic', 'Mean Traffic'),
+        align = 'crrrrrrrr',
+        caption = 'Descriptive Statistics For Different Weather Types') %>% 
+  kable_styling(bootstrap_options = c('striped', 'hover', 'condensed', 
+                                      'responsive', 'bordered'))
+```
+
+```{r plot4, weather vs avg traffic, message=FALSE,echo=FALSE}
+meanWeatherTravel = qplot(weather_main,
+               MeanTraffic,
+               data = weather_Summary,
+               aes(reorder(weather_main, -MeanTraffic)),
+               geom = "col",
+               fill = I("gold"),
+               colour = I("black"),
+               main = "Mean Traffic Volume by Weather") +
+            theme(axis.text.x = element_text(
+            angle = 90, 
+            vjust=0.5)) +
+            geom_text(aes(label=MeanTraffic), size=2.75, vjust=-.4)
+meanWeatherTravel
+```
+
+```{r chunk9, generalized linear regression modeling, message = FALSE, echo=FALSE}
+# Split Data into Training and Testing in R 
+sample_size = floor(0.7*nrow(data))
+set.seed(30)
+
+# randomly split data in r
+picked = sample(seq_len(nrow(data)),size = sample_size)
+development =data[picked,]
+holdout =data[-picked,]
+
+model_glm = glm(traffic_level ~ holiday_categorical + norm_fahrenheit + hour + weather_main, family = "gaussian", data = development)
+
+summary(model_glm)
+
+Output_glm <- predict(model_glm, holdout)
+view(Output_glm)
+
+holdout$Prediction = Output_glm
+holdout$PredictionCategorical =  ifelse(holdout$Prediction >= .5, 1, 0)
+```
+
+## Model Evaluation
+
+```{r chunk10, model evaluation, message = FALSE, echo=FALSE}
+Correct <- length(which(holdout$traffic_level == holdout$PredictionCategorical))
+Total <- nrow(holdout)
+Accuracy = Correct/Total
+print(round(Accuracy, digits = 3))
+
+TP <- length(which(holdout$traffic_level == 1 & holdout$PredictionCategorical == 1))
+FP <- length(which(holdout$traffic_level == 0 & holdout$PredictionCategorical == 1))
+Precision = TP/(TP+FP)
+print(round(Precision, digits = 3))
+
+FN <- length(which(holdout$traffic_level == 1 & holdout$PredictionCategorical == 0))
+Recall = TP/(TP+FN)
+print(round(Recall, digits = 3))
+
+F1 = TP/(TP+(1/2*(FP+FN)))
+print(round(F1, digits = 3))
+```
+
+```{r chunk11, model evaluation, message = FALSE, echo=FALSE}
+AUC = auc(holdout$traffic_level, holdout$PredictionCategorical)
+print(AUC)
+```
+
+|   |Accuracy|Precision|Recall|F1|AUC|
+|---|---|---|---|---|---|
+|GLM|0.908|0.88|0.944|0.911|0.9081|
+
+## Inferential Comparison
+
+```{r inferential1, message=FALSE, echo=FALSE}
+ungroup(data_df)
+data_df = group_by(holdout, weather_main)
+weather_Summary_categorical = summarize(data_df,
+                           TotalTraffic = sum(traffic_level))
+```
+
+```{r plotinferential1, weather vs categorical traffic, message=FALSE, echo=FALSE}
+CategoricWeatherTravel = qplot(weather_main,
+               TotalTraffic,
+               data = weather_Summary_categorical,
+               aes(reorder(weather_main, -TotalTraffic)),
+               geom = "col",
+               fill = I("gold"),
+               colour = I("black"),
+               main = "Total Categoric Traffic Volume by Weather") +
+            theme(axis.text.x = element_text(
+            angle = 90, 
+            vjust=0.5)) +
+            geom_text(aes(label=TotalTraffic), size=2.75, vjust=-.4)
+CategoricWeatherTravel
+```
+
+```{r inferential2, message=FALSE, echo=FALSE}
+ungroup(data_df)
+data_df = group_by(holdout, weather_main)
+weather_Summary_categorical_pred = summarize(data_df,
+                           TotalTraffic = sum(PredictionCategorical))
+```
+
+```{r plotinferential2, weather vs categorical traffic, message=FALSE, echo=FALSE}
+CategoricWeatherTravel = qplot(weather_main,
+               TotalTraffic,
+               data = weather_Summary_categorical_pred,
+               aes(reorder(weather_main, -TotalTraffic)),
+               geom = "col",
+               fill = I("gold"),
+               colour = I("black"),
+               main = "Total Predicted Categoric Traffic Volume by Weather") +
+            theme(axis.text.x = element_text(
+            angle = 90, 
+            vjust=0.5)) +
+            geom_text(aes(label=TotalTraffic), size=2.75, vjust=-.4)
+CategoricWeatherTravel
+```
+
+## Residuals
+
+```{r modelassumptions, message = FALSE, echo=FALSE}
+plot(model_glm)
+```
